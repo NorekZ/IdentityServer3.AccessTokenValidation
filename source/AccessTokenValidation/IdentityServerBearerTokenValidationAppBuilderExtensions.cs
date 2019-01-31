@@ -20,9 +20,13 @@ using Microsoft.Owin.Logging;
 using Microsoft.Owin.Security.Jwt;
 using Microsoft.Owin.Security.OAuth;
 using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens;
 using System.Linq;
 using System.Threading;
+using Microsoft.IdentityModel.Tokens;
+using SecurityKey = Microsoft.IdentityModel.Tokens.SecurityKey;
+using SecurityToken = Microsoft.IdentityModel.Tokens.SecurityToken;
 
 namespace Owin
 {
@@ -154,7 +158,7 @@ namespace Owin
                     {
                         ValidIssuer = options.IssuerName,
                         ValidAudience = audience,
-                        IssuerSigningToken = new X509SecurityToken(options.SigningCertificate),
+                        IssuerSigningKey = new X509SecurityKey(options.SigningCertificate),
 
                         NameClaimType = options.NameClaimType,
                         RoleClaimType = options.RoleClaimType,
@@ -211,29 +215,20 @@ namespace Owin
             }, LazyThreadSafetyMode.PublicationOnly);
         }
 
-        private static SecurityKey ResolveRsaKeys(
+        private static IEnumerable<SecurityKey> ResolveRsaKeys(
             string token, 
             SecurityToken securityToken, 
-            SecurityKeyIdentifier keyIdentifier, 
+            string kid, 
             TokenValidationParameters validationParameters)
         {
-            string id = null;
-            foreach (var keyId in keyIdentifier)
+            var id = kid ?? securityToken?.SecurityKey?.KeyId;
+
+            if (id == null)
             {
-                var nk = keyId as NamedKeySecurityKeyIdentifierClause;
-                if (nk != null)
-                {
-                    id = nk.Id;
-                    break;
-                }
+                return null;
             }
 
-            if (id == null) return null;
-
-            var issuerToken = validationParameters.IssuerSigningTokens.FirstOrDefault(it => it.Id == id);
-            if (issuerToken == null) return null;
-
-            return issuerToken.SecurityKeys.FirstOrDefault();
+            return validationParameters.IssuerSigningKeys.Where(it => it.KeyId == id);
         }
     }
 }
